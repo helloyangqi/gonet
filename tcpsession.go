@@ -42,6 +42,7 @@ type TCPSession struct {
 	writeChannel chan interface{}
 	buffer       *buffer.Buffer
 	closeChannel chan interface{}
+	Context      interface{}
 }
 
 func newTCPSession(conn *net.TCPConn, closef TCPSessionCloseFunc, h TCPSessionHandler) *TCPSession {
@@ -57,13 +58,6 @@ func newTCPSession(conn *net.TCPConn, closef TCPSessionCloseFunc, h TCPSessionHa
 		closeChannel: make(chan interface{}, 1)}
 }
 
-func (sess *TCPSession) Close() {
-	if atomic.LoadInt32((*int32)(&sess.state)) != int32(Closed) {
-		atomic.StoreInt32((*int32)(&sess.state), int32(Closed))
-		sess.Conn.Close()
-	}
-}
-
 func (sess *TCPSession) start() {
 	atomic.StoreInt32((*int32)(&sess.state), int32(Connected))
 	go sess.reader()
@@ -75,7 +69,7 @@ func (sess *TCPSession) reader() {
 	defer func() {
 		nlog.Debug("TCPSession[%s] reader exit, error:%v", sess.Conn.RemoteAddr().String(), err)
 		sess.Conn.CloseRead()
-		sess.SetState(Closed)
+		sess.setState(Closed)
 		sess.closeFn(sess, err)
 		sess.closeChannel <- 1
 	}()
@@ -130,7 +124,7 @@ func (sess *TCPSession) writer() {
 	defer func() {
 		nlog.Debug("TCPSession[%s] writer exit, error:%v", sess.Conn.RemoteAddr().String(), err)
 		sess.Conn.CloseWrite()
-		sess.SetState(Closed)
+		sess.setState(Closed)
 		//sess.closeFn(sess, err)
 	}()
 
@@ -194,6 +188,13 @@ func (sess *TCPSession) send(data []byte) error {
 	return nil
 }
 
+func (sess *TCPSession) Close() {
+	if atomic.LoadInt32((*int32)(&sess.state)) != int32(Closed) {
+		atomic.StoreInt32((*int32)(&sess.state), int32(Closed))
+		sess.Conn.Close()
+	}
+}
+
 func (sess *TCPSession) Write(msg interface{}) error {
 	select {
 	case sess.writeChannel <- msg:
@@ -213,10 +214,18 @@ func (sess *TCPSession) SetBufferSize(size int, lowestCap int) {
 	sess.buffer = buffer.NewBufferSize(size, lowestCap)
 }
 
-func (sess *TCPSession) SetState(state SessionState) {
+func (sess *TCPSession) setState(state SessionState) {
 	atomic.StoreInt32((*int32)(&sess.state), int32(state))
 }
 
 func (sess *TCPSession) IsConnected() bool {
 	return atomic.LoadInt32((*int32)(&sess.state)) == int32(Connected)
+}
+
+func (sess *TCPSession) AddEncoder(ec encoder.Encoder) {
+	sess.encoderList.PushBack(ec)
+}
+
+func (sess *TCPSession) AddDecoder(dc decoder.Decoder) {
+	sess.decoderList.PushBack(dc)
 }
