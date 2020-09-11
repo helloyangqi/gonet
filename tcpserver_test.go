@@ -3,27 +3,28 @@ package gonet
 import (
 	"bufio"
 	"fmt"
+	"github.com/helloyangqi/gonet/decoder"
+	"github.com/helloyangqi/gonet/encoder"
 	"time"
 )
 
-type ServerHandler struct{}
+type SessionHandler struct{}
 
-func (s ServerHandler) OnConnected(sess *TCPSession) {
+func (s *SessionHandler) OnConnected(sess *TCPSession) {
 	fmt.Println("OnConnected:", sess.Conn.RemoteAddr().String())
+	sess.decoderList.PushBack(decoder.NeweLengthDecoder(true, true))
+	sess.encoderList.PushBack(encoder.NewLengthEncoder(true, true))
 }
 
-func (s ServerHandler) OnDisconnected(sess *TCPSession, err error) {
+func (s *SessionHandler) OnDisconnected(sess *TCPSession, err error) {
 	fmt.Println("OnDisconncted", sess.Conn.RemoteAddr().String())
 }
 
-type SessionHandler struct{}
-
-func (sh *SessionHandler) OnMessage(sess *TCPSession, param interface{}) error {
+func (sh *SessionHandler) OnMessage(sess *TCPSession, param interface{})  {
 	fmt.Println("OnMessage")
 	reader := param.(*bufio.Reader)
 	data, err := reader.Discard(10)
 	fmt.Printf("session[%s] message:%s, err:%v\n", sess.Conn.RemoteAddr().String(), string(data), err)
-	return nil
 }
 
 func (sh *SessionHandler) OnError(sess *TCPSession, err error) {
@@ -33,7 +34,7 @@ func (sh *SessionHandler) OnError(sess *TCPSession, err error) {
 func main() {
 	cfg := TCPServerConfig{
 		ListenAddr:     "127.0.0.1:5566",
-		ServerHandler:  &ServerHandler{},
+		//ServerHandler:  &ServerHandler{},
 		SessionHandler: &SessionHandler{},
 	}
 	svr, err := NewTCPServer(cfg)

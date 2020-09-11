@@ -6,14 +6,9 @@ import (
 	"time"
 )
 
-type TCPServerHandler interface {
-	OnConnected(*TCPSession)
-	OnDisconnected(*TCPSession, error)
-}
-
 type TCPServerConfig struct {
 	ListenAddr     string
-	ServerHandler  TCPServerHandler
+	//ServerHandler  TCPServerHandler
 	SessionHandler TCPSessionHandler
 }
 
@@ -23,8 +18,9 @@ type TCPServer struct {
 	closeCh     chan interface{}
 	exitCh      chan error
 	sessions    sync.Map
-	svrHandler  TCPServerHandler
+	//svrHandler  TCPServerHandler
 	sessHandler TCPSessionHandler
+	logger NetLog
 }
 
 func NewTCPServer(config TCPServerConfig) (*TCPServer, error) {
@@ -36,10 +32,15 @@ func NewTCPServer(config TCPServerConfig) (*TCPServer, error) {
 		ListenAddr:  addr,
 		closeCh:     make(chan interface{}, 1),
 		exitCh:      make(chan error, 1),
-		svrHandler:  config.ServerHandler,
+		//svrHandler:  config.ServerHandler,
 		sessHandler: config.SessionHandler,
+		logger: &defaultNetLog{},
 	}
 	return s, nil
+}
+
+func (s *TCPServer) SetLogger(logger NetLog) {
+	s.logger = logger
 }
 
 func (s *TCPServer) Stop() {
@@ -74,7 +75,7 @@ func (s *TCPServer) Start() (ch <-chan error) {
 					if max := 1 * time.Second; tempDelay > max {
 						tempDelay = max
 					}
-					nlog.Error("TCPServer[%s] Accept error:%v; retrying in %v", s.ListenAddr.String(), err, tempDelay)
+					s.logger.Error("TCPServer[%s] Accept error:%v; retrying in %v", s.ListenAddr.String(), err, tempDelay)
 					time.Sleep(tempDelay)
 					continue
 				}
@@ -82,7 +83,7 @@ func (s *TCPServer) Start() (ch <-chan error) {
 				return
 			} else {
 				tempDelay = 0
-				sess := newTCPSession(conn, s.onDisconnected, s.sessHandler)
+				sess := newTCPSession(s, conn, s.sessHandler)
 				s.onConnected(sess)
 				sess.start()
 			}
@@ -94,12 +95,12 @@ func (s *TCPServer) Start() (ch <-chan error) {
 
 func (s *TCPServer) onConnected(sess *TCPSession) {
 	s.sessions.Store(sess.Conn.RemoteAddr().String(), sess)
-	s.svrHandler.OnConnected(sess)
+	s.sessHandler.OnConnected(sess)
 }
 
 func (s *TCPServer) onDisconnected(sess *TCPSession, err error) {
 	s.sessions.Delete(sess.Conn.RemoteAddr().String())
-	s.svrHandler.OnDisconnected(sess, err)
+	s.sessHandler.OnDisconnected(sess, err)
 }
 
 func (s *TCPServer) Broadcast(msg interface{}) {

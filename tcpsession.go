@@ -16,6 +16,8 @@ import (
 )
 
 type TCPSessionHandler interface {
+	OnConnected(*TCPSession)
+	OnDisconnected(*TCPSession, error)
 	OnMessage(*TCPSession, interface{})
 	OnError(*TCPSession, error)
 }
@@ -33,7 +35,7 @@ const (
 
 type TCPSession struct {
 	Conn         *net.TCPConn
-	closeFn      TCPSessionCloseFunc
+	//closeFn      TCPSessionCloseFunc
 	handler      TCPSessionHandler
 	state        SessionState
 	keepAlive    time.Duration
@@ -42,19 +44,22 @@ type TCPSession struct {
 	writeChannel chan interface{}
 	buffer       *buffer.Buffer
 	closeChannel chan interface{}
+	server *TCPServer
 }
 
-func newTCPSession(conn *net.TCPConn, closef TCPSessionCloseFunc, h TCPSessionHandler) *TCPSession {
+func newTCPSession(server *TCPServer, conn *net.TCPConn, h TCPSessionHandler) *TCPSession {
 	return &TCPSession{
 		Conn:         conn,
-		closeFn:      closef,
+		//closeFn:      closef,
 		handler:      h,
 		state:        Connected,
 		decoderList:  list.New(),
 		encoderList:  list.New(),
 		writeChannel: make(chan interface{}, defaultWriteChannelSize),
 		buffer:       buffer.NewBuffer(),
-		closeChannel: make(chan interface{}, 1)}
+		closeChannel: make(chan interface{}, 1),
+		server: server,
+	}
 }
 
 func (sess *TCPSession) Close() {
@@ -73,10 +78,10 @@ func (sess *TCPSession) start() {
 func (sess *TCPSession) reader() {
 	var err error
 	defer func() {
-		nlog.Debug("TCPSession[%s] reader exit, error:%v", sess.Conn.RemoteAddr().String(), err)
+		sess.server.logger.Debug("TCPSession[%s] reader exit, error:%v", sess.Conn.RemoteAddr().String(), err)
 		sess.Conn.CloseRead()
 		sess.SetState(Closed)
-		sess.closeFn(sess, err)
+		sess.handler.OnDisconnected(sess, err)
 		sess.closeChannel <- 1
 	}()
 
@@ -84,20 +89,20 @@ func (sess *TCPSession) reader() {
 		if sess.keepAlive.Nanoseconds() > 0 {
 			if err = sess.Conn.SetReadDeadline(time.Now().Add(sess.keepAlive)); err != nil {
 				sess.handler.OnError(sess, err)
-				sess.closeFn(sess, err)
-				return
+				//sess.handler.OnDisconnected(sess, err)
+				//return
 			}
 		}
 
 		n, err := sess.buffer.ReadFrom(sess.Conn)
 		if err != nil {
-			sess.handler.OnError(sess, err)
-			sess.closeFn(sess, err)
+			//sess.handler.OnError(sess, err)
+			sess.handler.OnDisconnected(sess, err)
 			return
 		}
 
 		if n <= 0 {
-			sess.closeFn(sess, nil)
+			sess.handler.OnDisconnected(sess, nil)
 			return
 		}
 
@@ -128,7 +133,7 @@ func (sess *TCPSession) reader() {
 func (sess *TCPSession) writer() {
 	var err error
 	defer func() {
-		nlog.Debug("TCPSession[%s] writer exit, error:%v", sess.Conn.RemoteAddr().String(), err)
+		sess.server.logger.Debug("TCPSession[%s] writer exit, error:%v", sess.Conn.RemoteAddr().String(), err)
 		sess.Conn.CloseWrite()
 		sess.SetState(Closed)
 		//sess.closeFn(sess, err)

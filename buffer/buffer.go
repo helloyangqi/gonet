@@ -82,7 +82,7 @@ func (b *Buffer) ReadAll() []byte {
 	return b.Read(b.Size())
 }
 
-func (b *Buffer) Write(data []byte) {
+func (b *Buffer) Write(data []byte) (int, error) {
 	if b.r >= b.w {
 		b.Reset()
 	}
@@ -90,4 +90,15 @@ func (b *Buffer) Write(data []byte) {
 	b.allocate(wlen)
 	copy(b.buff[b.w:], data)
 	b.w += wlen
+	return b.Size(), nil
+}
+
+func (b *Buffer) WriteByte(data byte) {
+	if b.r >= b.w {
+		b.Reset()
+	}
+
+	b.allocate(1)
+	b.buff[b.w] = data
+	b.w += 1
 }

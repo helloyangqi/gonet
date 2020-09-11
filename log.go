@@ -10,10 +10,6 @@ type NetLog interface {
 	Error(f string, args ...interface{})
 }
 
-var (
-	nlog NetLog = &defaultNetLog{}
-)
-
 type defaultNetLog struct{}
 
 func (l *defaultNetLog) Debug(f string, args ...interface{}) {

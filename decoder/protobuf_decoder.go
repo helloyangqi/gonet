@@ -18,7 +18,7 @@ func NewProtobufDecoder(msg proto.Message) *ProtobufDecoder {
 	return &ProtobufDecoder{msgType: rv.Type()}
 }
 
-func (dc ProtobufDecoder) Decode(in interface{}) (interface{}, error) {
+func (dc ProtobufDecoder) Decode(in interface{}) (proto.Message, error) {
 	var data []byte
 	switch v := in.(type) {
 	case *buffer.Buffer:

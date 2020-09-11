@@ -7,18 +7,18 @@ import (
 	"github.com/helloyangqi/gonet/buffer"
 )
 
-type ServerHandler struct{}
 
-func (s ServerHandler) OnConnected(sess *gonet.TCPSession) {
+type SessionHandler struct{}
+
+func (s SessionHandler) OnConnected(sess *gonet.TCPSession) {
 	sess.SetBufferSize(16, 4)
 	fmt.Println("OnConnected:", sess.Conn.RemoteAddr().String())
 }
 
-func (s ServerHandler) OnDisconnected(sess *gonet.TCPSession, err error) {
+func (s SessionHandler) OnDisconnected(sess *gonet.TCPSession, err error) {
 	fmt.Println("OnDisconncted", sess.Conn.RemoteAddr().String())
 }
 
-type SessionHandler struct{}
 
 func (sh *SessionHandler) OnMessage(sess *gonet.TCPSession, param interface{}) {
 	buffer := param.(*buffer.Buffer)
@@ -35,7 +35,7 @@ func (sh *SessionHandler) OnError(sess *gonet.TCPSession, err error) {
 func main() {
 	cfg := gonet.TCPServerConfig{
 		ListenAddr:     "127.0.0.1:5566",
-		ServerHandler:  &ServerHandler{},
+		//ServerHandler:  &ServerHandler{},
 		SessionHandler: &SessionHandler{},
 	}
 	svr, err := gonet.NewTCPServer(cfg)

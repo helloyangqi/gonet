@@ -15,7 +15,14 @@ type LengthEncoder struct {
 	IsContainLength bool
 }
 
-func (dc LengthEncoder) Encode(in interface{}) (interface{}, error) {
+func NewLengthEncoder(isLittleEndian, isContainLength bool) *LengthEncoder {
+	return &LengthEncoder{
+		IsLittleEndian:  isLittleEndian,
+		IsContainLength: isContainLength,
+	}
+}
+
+func (dc LengthEncoder) Encode(in interface{}) (*buffer.Buffer, error) {
 	var data []byte
 	switch v := in.(type) {
 	case *buffer.Buffer:
